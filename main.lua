@@ -13,8 +13,7 @@
 GroupfinderFlags = {}
 GroupfinderFlags.mainFrame = CreateFrame("Frame", "GroupfinderFlagsFrame", UIParent)
 GroupfinderFlags.FIRST_SLASH_START = 0
-
-local LRI = LibStub("LibRealmInfo")
+GroupfinderFlags.PGF_LOADED = false
 
 -- own realm
 GroupfinderFlags.OWN_REALM = GetRealmName()
@@ -48,7 +47,8 @@ end
 
 
 -- flage files
-GroupfinderFlags.PATH = "|TInterface\\AddOns\\GroupfinderFlags\\images\\"
+GroupfinderFlags.TEXT_IMAGE_PATH = "|TInterface\\AddOns\\GroupfinderFlags\\flag_icons\\"
+GroupfinderFlags.TEXTURE_IMAGE_PATH = "Interface\\AddOns\\GroupfinderFlags\\flag_textures\\"
 GroupfinderFlags.SIZE = ":9:15|t"
 GroupfinderFlags.FLAGS = {
 	-- europe
@@ -64,30 +64,32 @@ GroupfinderFlags.FLAGS = {
 	["brazilian"] = "brazilian"..GroupfinderFlags.SIZE,
 	["oceanic"] = "oceanic"..GroupfinderFlags.SIZE,
 	["mexican"] = "mexican"..GroupfinderFlags.SIZE,
-	-----------------------------
+}
+
+GroupfinderFlags.TEXTURES = {
 	-- europe
-	["deDE"] = "german"..GroupfinderFlags.SIZE,
-	["enGB"] = "british"..GroupfinderFlags.SIZE,
-	["ptPT"] = "portuguese"..GroupfinderFlags.SIZE,
-	["ruRU"] = "russian"..GroupfinderFlags.SIZE,
-	["frFR"] = "french"..GroupfinderFlags.SIZE,
-	["esES"] = "spanish"..GroupfinderFlags.SIZE,
-	["itIT"] = "italian"..GroupfinderFlags.SIZE,
+	["german"] = "german.tga",
+	["british"] = "british.tga",
+	["portuguese"] = "portuguese.tga",
+	["russian"] = "russian.tga",
+	["french"] = "french.tga",
+	["spanish"] = "spanish.tga",
+	["italian"] = "italian.tga",
 	-- american/oceanic
-	["enUS"] = "american"..GroupfinderFlags.SIZE,
-	["ptBR"] = "brazilian"..GroupfinderFlags.SIZE,
-	["ozOZ"] = "oceanic"..GroupfinderFlags.SIZE,
-	["esMX"] = "mexican"..GroupfinderFlags.SIZE,
+	["american"] = "american.tga",
+	["brazilian"] = "brazilian.tga",
+	["oceanic"] = "oceanic.tga",
+	["mexican"] = "mexican.tga",
 }
 
 -- continent maps
 GroupfinderFlags.MAPS = {
-	["america"] = "Interface\\Addons\\GroupfinderFlags\\images\\map_america_oceania.tga",
-	["europe"] = "Interface\\Addons\\GroupfinderFlags\\images\\map_europe.tga",
-	["america_sw"] = "Interface\\Addons\\GroupfinderFlags\\images\\map_america_oceania_sw.tga",
-	["europe_sw"] = "Interface\\Addons\\GroupfinderFlags\\images\\map_europe_sw.tga",
+	["america"] = "Interface\\Addons\\GroupfinderFlags\\misc_images\\map_america_oceania.tga",
+	["europe"] = "Interface\\Addons\\GroupfinderFlags\\misc_images\\map_europe.tga",
+	["america_sw"] = "Interface\\Addons\\GroupfinderFlags\\misc_images\\map_america_oceania_sw.tga",
+	["europe_sw"] = "Interface\\Addons\\GroupfinderFlags\\misc_images\\map_europe_sw.tga",
 }
-GroupfinderFlags.BUTTON_OVERLAY = "Interface\\Addons\\GroupfinderFlags\\images\\button_overlay.tga"
+GroupfinderFlags.BUTTON_OVERLAY = "Interface\\Addons\\GroupfinderFlags\\misc_images\\button_overlay.tga"
 
 local function GFF_ManipulateTextureColors(btn)
 	if btn.Top         then btn.Top:SetVertexColor(0.6157, 0.4627, 0.0902) end
@@ -98,6 +100,14 @@ local function GFF_ManipulateTextureColors(btn)
 	if btn.BottomRight then btn.BottomRight:SetVertexColor(0.6157, 0.4627, 0.0902) end
 	if btn.Left        then btn.Left:SetVertexColor(0.6157, 0.4627, 0.0902) end
 	if btn.Right       then btn.Right:SetVertexColor(0.6157, 0.4627, 0.0902) end
+end
+
+local function NormalizeRealmname(realmname)
+	if realmname then
+		return realmname:gsub("[%s%-]", "")
+	else
+		return nil
+	end
 end
 
 
@@ -136,7 +146,7 @@ opanel.us_button:SetSize(64, 64)
 opanel.us_button:SetNormalTexture(GroupfinderFlags.MAPS.america_sw)
 opanel.us_button:SetPushedTexture(GroupfinderFlags.MAPS.america)
 opanel.us_button:SetDisabledTexture(GroupfinderFlags.MAPS.america)
-opanel.us_button:SetHighlightTexture(GroupfinderFlags.BUTTON_OVERLAY, 0.5)
+opanel.us_button:SetHighlightTexture(GroupfinderFlags.BUTTON_OVERLAY)
 opanel.us_button:SetScript("OnClick", function (self)
 	GroupfinderFlagsDB.region = "america"
 	self:Disable()
@@ -155,7 +165,7 @@ opanel.eu_button:SetSize(64, 64)
 opanel.eu_button:SetNormalTexture(GroupfinderFlags.MAPS.europe_sw)
 opanel.eu_button:SetPushedTexture(GroupfinderFlags.MAPS.europe)
 opanel.eu_button:SetDisabledTexture(GroupfinderFlags.MAPS.europe)
-opanel.eu_button:SetHighlightTexture(GroupfinderFlags.BUTTON_OVERLAY, 0.5)
+opanel.eu_button:SetHighlightTexture(GroupfinderFlags.BUTTON_OVERLAY)
 opanel.eu_button:SetScript("OnClick", function (self)
 	GroupfinderFlagsDB.region = "europe"
 	self:Disable()
@@ -185,11 +195,23 @@ end)
 opanel.boxtextForGrpFinder = opanel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
 opanel.boxtextForGrpFinder:SetPoint("LEFT", opanel.boxForGrpFinder, "RIGHT", 10, 1)
 opanel.boxtextForGrpFinder:SetJustifyH("LEFT")
-opanel.boxtextForGrpFinder:SetText("Show the country's flag in the Groupfinder UI")
+opanel.boxtextForGrpFinder:SetText("Show the country's flag for applicants in the Groupfinder UI")
+
+-- option for disabling flags in the groupfinder
+opanel.boxForLeaderGrpFinder = CreateFrame("CheckButton", "GFF_ShowGrpFinderFlagCheckbox", opanel, "OptionsBaseCheckButtonTemplate")
+opanel.boxForLeaderGrpFinder:SetPoint("TOPLEFT", opanel.boxForGrpFinder, "BOTTOMLEFT", 0, -1)
+opanel.boxForLeaderGrpFinder:SetScript("OnClick", function()
+	GroupfinderFlagsDB.showLeaderFlagInGrpFinder = not GroupfinderFlagsDB.showLeaderFlagInGrpFinder
+	opanel.boxForLeaderGrpFinder:SetChecked(GroupfinderFlagsDB.showLeaderFlagInGrpFinder)
+end)
+opanel.boxtextForLeaderGrpFinder = opanel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+opanel.boxtextForLeaderGrpFinder:SetPoint("LEFT", opanel.boxForLeaderGrpFinder, "RIGHT", 10, 1)
+opanel.boxtextForLeaderGrpFinder:SetJustifyH("LEFT")
+opanel.boxtextForLeaderGrpFinder:SetText("Show the country's flag of the group leader in the Groupfinder UI")
 
 -- option for disabling flags in tooltip
 opanel.boxForTooltipFlag = CreateFrame("CheckButton", "GFF_ShowTooltipFlagCheckbox", opanel, "OptionsBaseCheckButtonTemplate")
-opanel.boxForTooltipFlag:SetPoint("TOPLEFT", opanel.boxForGrpFinder, "BOTTOMLEFT", 0, -1)
+opanel.boxForTooltipFlag:SetPoint("TOPLEFT", opanel.boxForLeaderGrpFinder, "BOTTOMLEFT", 0, -1)
 opanel.boxForTooltipFlag:SetScript("OnClick", function()
 	GroupfinderFlagsDB.showFlagInTooltip = not GroupfinderFlagsDB.showFlagInTooltip
 	opanel.boxForTooltipFlag:SetChecked(GroupfinderFlagsDB.showFlagInTooltip)
@@ -249,6 +271,7 @@ local function HookfunctionForGametooltip(...)
 	-- get unit infos from the game tooltip
 	_, unit = GameTooltip:GetUnit()
 
+	-- only proceed if unit is not nil
 	if unit ~= nil then
 
 		-- get GUID infos from the game tooltip
@@ -265,6 +288,8 @@ local function HookfunctionForGametooltip(...)
 				if realm == nil or realm == "" then
 					realm = GroupfinderFlags.OWN_REALM
 				end
+
+				realm = NormalizeRealmname(realm)
 
 				-- check whether region is selected
 				if GroupfinderFlagsDB.region ~= nil and (GroupfinderFlagsDB.region == "europe" or GroupfinderFlagsDB.region == "america") then
@@ -284,7 +309,7 @@ local function HookfunctionForGametooltip(...)
 						if not GroupfinderFlagsDB.showFlagOnlyIfOtherCountry or languageList[realm] ~= languageList[GroupfinderFlags.OWN_REALM] then
 
 							-- adding the flag by :AddLine()
-							local flag = GroupfinderFlags.PATH..GroupfinderFlags.FLAGS[languageList[realm]]
+							local flag = GroupfinderFlags.TEXT_IMAGE_PATH..GroupfinderFlags.FLAGS[languageList[realm]]
 							local country_name = "|cFFFFFFFF" .. GroupfinderFlags.COUNTRYNAMES[GroupfinderFlags.LOCALE_CODE][languageList[realm]] .. "|r"
 							local both_activated = GroupfinderFlagsDB.showFlagInTooltip and GroupfinderFlagsDB.showCountrynameInTooltip
 							GameTooltip:AddLine((GroupfinderFlagsDB.showFlagInTooltip and flag or "") .. (both_activated and "|cFFFFFFFF - |r" or "") .. (GroupfinderFlagsDB.showCountrynameInTooltip and country_name or ""))
@@ -332,6 +357,8 @@ local function HookfunctionForGroupFinderSearchTooltip(tooltip, resultID)
 		realm = string.sub(fullname, string.len(shortname)+2)
 	end
 
+	realm = NormalizeRealmname(realm)
+
 	-- get region specific realm language list
 	if GroupfinderFlagsDB.region == "europe" then
 		languageList = GroupfinderFlags.EU_REALM_LANGUAGES
@@ -346,7 +373,7 @@ local function HookfunctionForGroupFinderSearchTooltip(tooltip, resultID)
 		if not GroupfinderFlagsDB.showFlagOnlyIfOtherCountry or languageList[realm] ~= languageList[GroupfinderFlags.OWN_REALM] then
 
 			-- adding the flag by :AddLine()
-			local flag = GroupfinderFlags.PATH..GroupfinderFlags.FLAGS[languageList[realm]]
+			local flag = GroupfinderFlags.TEXT_IMAGE_PATH..GroupfinderFlags.FLAGS[languageList[realm]]
 			local country_name = "|cFFFFFFFF" .. GroupfinderFlags.COUNTRYNAMES[GroupfinderFlags.LOCALE_CODE][languageList[realm]] .. "|r"
 			local both_activated = GroupfinderFlagsDB.showFlagInTooltip and GroupfinderFlagsDB.showCountrynameInTooltip
 			tooltip:AddLine(" ")
@@ -361,6 +388,11 @@ end
 
 -- hooking function for the applicantviewer
 local function HookfunctionForGroupFinderApplicants(member, appID, memberIdx)
+
+	-- reset flag
+	if member.GFF_text_flag then
+		member.GFF_text_flag:SetText("")
+	end
 
 	if not GroupfinderFlagsDB.showFlagInGrpFinder then
 		return
@@ -377,13 +409,91 @@ local function HookfunctionForGroupFinderApplicants(member, appID, memberIdx)
 	-- getting applicant's name
 	local name, _, _, _, _, _, _, _, _, _, relationship = C_LFGList.GetApplicantMemberInfo(appID, memberIdx);
 
-	if GroupfinderFlagsDB.region == nil or (GroupfinderFlagsDB.region ~= "europe" and GroupfinderFlagsDB.region ~= "america") then
-		return
-	end
-
 	-- extract name+realm and (only) name
 	shortname = Ambiguate(name, "short")
 	fullname = Ambiguate(name, "mail")
+
+	-- if:     shortname and fullname are equal -> applicant is from user's own realm
+	-- else:   extract realm from fullname
+	if shortname == fullname then
+		realm = GroupfinderFlags.OWN_REALM
+	else
+		realm = string.sub(fullname, string.len(shortname)+2)
+	end
+
+	realm = NormalizeRealmname(realm)
+
+	-- get region specific realm language list
+	if GroupfinderFlagsDB.region == "europe" then
+		languageList = GroupfinderFlags.EU_REALM_LANGUAGES
+	elseif GroupfinderFlagsDB.region == "america" then
+		languageList = GroupfinderFlags.US_REALM_LANGUAGES
+	end
+
+	-- if option "showFlagOnlyIfOtherCountry" is active, only proceed with different languages
+	if GroupfinderFlagsDB.showFlagOnlyIfOtherCountry and languageList[realm] == languageList[GroupfinderFlags.OWN_REALM] then
+		return
+	end
+
+	-- add a font string for displaying the flag if needed
+	if not member.GFF_text_flag then
+		member.GFF_text_flag = member:CreateFontString("$parentFlag", "ARTWORK", "GameFontNormalSmall")
+		member.GFF_text_flag:SetPoint("LEFT", member.Name, "RIGHT", 3, 0)
+	end
+	-- set the appropiate flag
+	member.GFF_text_flag:SetText(languageList[realm] ~= nil and GroupfinderFlags.TEXT_IMAGE_PATH..GroupfinderFlags.FLAGS[languageList[realm]] or "")
+
+	-- recalculate the name column's width (taken from blizz code and modified)
+	local nameLength = 100 - 15
+	if relationship then
+		member.FriendIcon:SetPoint("LEFT", member.GFF_text_flag, "RIGHT", 0, 0)
+		nameLength = nameLength - 22
+	end
+  	if ( member.Name:GetWidth() > nameLength ) then
+    	member.Name:SetWidth(nameLength)
+  	end
+
+end
+
+
+-- hook for the search result view (group leader flag)
+local function HookfunctionForGroupFinderSearchLeaderFlag(self)
+
+	-- reset flag
+	if self.GFF_text_flag then
+		self.GFF_text_flag:SetText("")
+	end
+	if self.GFF_background_flag then
+		self.GFF_background_flag:Hide()
+	end
+
+	if not GroupfinderFlagsDB.showLeaderFlagInGrpFinder then
+		return
+	end
+
+	-- check whether region is selected
+	if GroupfinderFlagsDB.region == nil or (GroupfinderFlagsDB.region ~= "europe" and GroupfinderFlagsDB.region ~= "america") then
+		return
+	end
+	
+	local resultID = self.resultID
+
+	if not C_LFGList.HasSearchResultInfo(resultID) then
+		return
+	end
+
+	local searchResultInfo = C_LFGList.GetSearchResultInfo(self.resultID)
+
+	if not searchResultInfo.leaderName then
+		return
+	end
+
+	-- variables
+	local realm, shortname, fullname, languageList
+
+	-- extract name+realm and (only) name
+	shortname = Ambiguate(searchResultInfo.leaderName, "short")
+	fullname = Ambiguate(searchResultInfo.leaderName, "mail")
 
 	-- if:     shortname and fullname are equal -> applicant is from user's own realm
 	-- else:   extract realm from fullname
@@ -406,22 +516,47 @@ local function HookfunctionForGroupFinderApplicants(member, appID, memberIdx)
 	end
 
 	-- add a font string for displaying the flag if needed
-	if not member.flag then
-		member.flag = member:CreateFontString("$parentFlag", "ARTWORK", "GameFontNormalSmall")
-		member.flag:SetPoint("LEFT", member.Name, "RIGHT", 3, 0)
+	if not self.GFF_text_flag then
+		self.GFF_text_flag = self:CreateFontString("$parentFlag", "ARTWORK", "GameFontNormalSmall")
+		if GroupfinderFlags.PGF_LOADED then
+			self.GFF_text_flag:SetPoint("LEFT", self.Name, "RIGHT", -10, 1.5)
+		else
+			self.GFF_text_flag:SetPoint("LEFT", self.Name, "RIGHT", 2, 0)
+		end
 	end
-	-- set the appropiate flag
-	member.flag:SetText(languageList[realm] ~= nil and GroupfinderFlags.PATH..GroupfinderFlags.FLAGS[languageList[realm]] or "")
 
-	-- recalculate the name column's width (taken from blizz code and modified)
-	local nameLength = 100 - 15
-	if relationship then
-		member.FriendIcon:SetPoint("LEFT", member.flag, "RIGHT", 0, 0)
-		nameLength = nameLength - 22
+	---- EXPERIMENTAL ----
+
+	if not self.GFF_background_flag then
+		self.GFF_background_flag = self:CreateTexture(nil, "ARTWORK")
+		self.GFF_background_flag:SetAllPoints(self.DataDisplay)
+		--self.GFF_background_flag:SetPoint("TOPRIGHT", self.DataDisplay, "TOPRIGHT", 0, 0)
+		--self.GFF_background_flag:SetPoint("BOTTOMRIGHT", self.DataDisplay, "BOTTOMRIGHT", 0, 0)
+		--self.GFF_background_flag:SetPoint("TOPLEFT", self.DataDisplay, "TOPRIGHT", -5, 0)
+		--self.GFF_background_flag:SetPoint("BOTTOMLEFT", self.DataDisplay, "BOTTOMRIGHT", -5, 0)
+		self.GFF_background_flag:SetAlpha(0.25)
 	end
-  	if ( member.Name:GetWidth() > nameLength ) then
-    	member.Name:SetWidth(nameLength)
-  	end
+
+	---- EXPERIMENTAL ----
+
+	-- set the appropiate flag
+	self.GFF_text_flag:SetText(languageList[realm] ~= nil and GroupfinderFlags.TEXT_IMAGE_PATH..GroupfinderFlags.FLAGS[languageList[realm]] or "")
+	if languageList[realm] ~= nil then
+		self.GFF_background_flag:Show()
+		self.GFF_background_flag:SetTexture(GroupfinderFlags.TEXTURE_IMAGE_PATH..GroupfinderFlags.TEXTURES[languageList[realm]])
+	end
+
+	if not GroupfinderFlags.PGF_LOADED then
+		-- recalculate the name column's width (taken from blizz code and modified)
+		local nameLength = 176 - 17
+		if searchResultInfo.voiceChat ~= "" then
+			self.VoiceChat:SetPoint("LEFT", self.GFF_text_flag, "RIGHT", 2, 0)
+			nameLength = nameLength - 24
+		end
+		if ( self.Name:GetWidth() > nameLength ) then
+			self.Name:SetWidth(nameLength)
+		end
+	end
 
 end
 
@@ -454,6 +589,9 @@ local function OnEvent(self, event, arg1, arg2, ...)
 		if GroupfinderFlagsDB.showFlagOnlyIfOtherCountry == nil then
 			GroupfinderFlagsDB.showFlagOnlyIfOtherCountry = false
 		end
+		if GroupfinderFlagsDB.showLeaderFlagInGrpFinder == nil then
+			GroupfinderFlagsDB.showLeaderFlagInGrpFinder = true
+		end
 
 		-- unregister PLAYER_LOGIN after retrieving saved variables
     	--GroupfinderFlags.mainFrame:UnregisterEvent("PLAYER_LOGIN")
@@ -461,6 +599,7 @@ local function OnEvent(self, event, arg1, arg2, ...)
 
     	-- set up the option panel
     	GroupfinderFlags.opanel.boxForGrpFinder:SetChecked(GroupfinderFlagsDB.showFlagInGrpFinder)
+		GroupfinderFlags.opanel.boxForLeaderGrpFinder:SetChecked(GroupfinderFlagsDB.showLeaderFlagInGrpFinder)
     	GroupfinderFlags.opanel.boxForTooltipFlag:SetChecked(GroupfinderFlagsDB.showFlagInTooltip)
     	GroupfinderFlags.opanel.boxForTooltipCountryNames:SetChecked(GroupfinderFlagsDB.showCountrynameInTooltip)
     	GroupfinderFlags.opanel.boxForOnlyShowingIfLanguagesDiff:SetChecked(GroupfinderFlagsDB.showFlagOnlyIfOtherCountry)
@@ -537,6 +676,11 @@ local function OnEvent(self, event, arg1, arg2, ...)
     		GroupfinderFlags.regionSelectionFrame = selectionFrame
     	end
 	end
+	if event == "PLAYER_LOGIN" then
+		GroupfinderFlags.mainFrame:UnregisterEvent("PLAYER_LOGIN")
+		local loaded, _ = IsAddOnLoaded("PremadeGroupsFilter")
+		GroupfinderFlags.PGF_LOADED = loaded
+	end
 end
 
 
@@ -549,13 +693,24 @@ end
 -- hooking blizz's code: --
 -- hook for the applicantviewer
 hooksecurefunc("LFGListApplicationViewer_UpdateApplicantMember", HookfunctionForGroupFinderApplicants)
---
+-- hook for the search result view tooltip
 hooksecurefunc("LFGListUtil_SetSearchEntryTooltip", HookfunctionForGroupFinderSearchTooltip)
+-- hook for the search result view (group leader flag)
+hooksecurefunc("LFGListSearchEntry_Update", HookfunctionForGroupFinderSearchLeaderFlag)
 -- hook for the gametooltip
-GameTooltip:HookScript("OnTooltipSetUnit", HookfunctionForGametooltip)
+TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tooltip, data)
+
+	-- check if called tooltip is blizz's game tooltip and not a third party copy
+	if tooltip ~= _G.GameTooltip then
+		return
+	end
+
+	HookfunctionForGametooltip()
+end)
 
 -- loading saved settings
 GroupfinderFlags.mainFrame:RegisterEvent("ADDON_LOADED")
+GroupfinderFlags.mainFrame:RegisterEvent("PLAYER_LOGIN")
 GroupfinderFlags.mainFrame:SetScript("OnEvent", OnEvent)
 
 
